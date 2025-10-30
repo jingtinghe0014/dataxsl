@@ -1,0 +1,62 @@
+# logging.yaml
+version: 1
+disable_existing_loggers: False
+
+formatters:
+  standard:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  detailed:
+    format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: standard
+    stream: ext://sys.stdout
+
+  file_handler:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/data_xsl.log
+    when: midnight
+    interval: 1
+    backupCount: 30
+    encoding: utf8
+
+  error_file_handler:
+    class: logging.handlers.TimedRotatingFileHandler
+    level: ERROR
+    formatter: detailed
+    filename: logs/errors.log
+    when: midnight
+    interval: 1
+    backupCount: 30
+    encoding: utf8
+
+loggers:
+  __main__:  # 你的应用程序的日志记录器
+    level: ERROR
+    handlers: [console, file_handler, error_file_handler]
+    propagate: no
+
+  dataxsl.excel.ExcelReader:  # 你开发的包的日志记录器
+    level: ERROR
+    handlers: [console, file_handler, error_file_handler]
+    propagate: no
+
+  dataxsl.mysql.MySQLWriter:
+    level: ERROR
+    handlers: [ console, file_handler, error_file_handler ]
+    propagate: no
+
+  msoffcrypto:
+    level: ERROR
+    handlers: [ console, file_handler, error_file_handler ]
+    propagate: no
+
+root:  # 根记录器，捕获所有未明确配置的记录器
+  level: ERROR
+  handlers: [console, file_handler, error_file_handler]
+

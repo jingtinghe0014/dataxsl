@@ -1,0 +1,319 @@
+{
+  "job": {
+    "setting": {
+      "channel": 1,
+      "queue_size": 10,
+      "parallel": 1
+    },
+    "content": [
+      {
+        "reader": {
+          "name": "excel_reader",
+          "mode": "readOnly",
+          "parameter": {
+            "path": "/Users/carlostevez/PycharmProjects/dataxsl/tests/data/zofund/$bizYear/中欧基金-east2-$bizDate.xlsx",
+            "encode": "utf-8",
+            "sheet_name": "ZZTZCCB",
+            "exl_password": "ENC(b5c9cb63cba600c6158eb929ef662af031cfef1540c881c3bd60066edce1bed4)",
+            "header": 0,
+            "skip_rows": 1,
+            "column": [
+              {
+                "index": "0",
+                "type": "string"
+              },
+              {
+                "index": "1",
+                "type": "string"
+              },
+              {
+                "index": "2",
+                "type": "string"
+              },
+              {
+                "index": "3",
+                "type": "string"
+              },
+              {
+                "index": "4",
+                "type": "string"
+              },
+              {
+                "index": "5",
+                "type": "string"
+              },
+              {
+                "index": "6",
+                "type": "string"
+              },
+              {
+                "index": "7",
+                "type": "string"
+              },
+              {
+                "index": "8",
+                "type": "string"
+              },
+              {
+                "index": "9",
+                "type": "string"
+              },
+              {
+                "index": "10",
+                "type": "string"
+              },
+              {
+                "index": "11",
+                "type": "string"
+              },
+              {
+                "index": "12",
+                "type": "string"
+              },
+              {
+                "index": "13",
+                "type": "string"
+              },
+              {
+                "index": "14",
+                "type": "string"
+              },
+              {
+                "index": "15",
+                "type": "string"
+              },
+              {
+                "index": "16",
+                "type": "string"
+              },
+              {
+                "index": "17",
+                "type": "string"
+              },
+              {
+                "index": "18",
+                "type": "string"
+              },
+              {
+                "index": "19",
+                "type": "string"
+              },
+              {
+                "index": "20",
+                "type": "string"
+              },
+              {
+                "index": "21",
+                "type": "string"
+              },
+              {
+                "index": "22",
+                "type": "string"
+              },
+              {
+                "index": "23",
+                "type": "decimal"
+              },
+              {
+                "index": "24",
+                "type": "decimal"
+              },
+              {
+                "index": "25",
+                "type": "decimal"
+              },
+              {
+                "index": "26",
+                "type": "decimal"
+              },
+              {
+                "index": "27",
+                "type": "decimal"
+              },
+              {
+                "index": "28",
+                "type": "decimal"
+              },
+              {
+                "index": "29",
+                "type": "decimal"
+              },
+              {
+                "index": "30",
+                "type": "decimal"
+              },
+              {
+                "index": "31",
+                "type": "decimal"
+              },
+              {
+                "index": "32",
+                "type": "decimal"
+              },
+              {
+                "index": "33",
+                "type": "decimal"
+              },
+              {
+                "index": "34",
+                "type": "decimal"
+              },
+              {
+                "index": "35",
+                "type": "decimal"
+              },
+              {
+                "index": "36",
+                "type": "decimal"
+              },
+              {
+                "index": "37",
+                "type": "string"
+              },
+              {
+                "index": "38",
+                "type": "string"
+              },
+              {
+                "index": "39",
+                "type": "string"
+              },
+              {
+                "index": "40",
+                "type": "string"
+              },
+              {
+                "index": "41",
+                "type": "string"
+              },
+              {
+                "index": "42",
+                "type": "string"
+              },
+              {
+                "index": "43",
+                "type": "string"
+              },
+              {
+                "index": "44",
+                "type": "string"
+              },
+              {
+                "index": "45",
+                "type": "string"
+              },
+              {
+                "index": "46",
+                "type": "string"
+              },
+              {
+                "index": "47",
+                "type": "string"
+              },
+              {
+                "index": "48",
+                "type": "string"
+              },
+              {
+                "index": "49",
+                "type": "string"
+              },
+              {
+                "index": "50",
+                "type": "string"
+              },
+              {
+                "index": "51",
+                "type": "string"
+              },
+              {
+                "index": "52",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "writer": {
+            "name": "mysql_writer",
+            "parameter": {
+              "writerMode": "insert",
+              "table": "ETL_EAST2_ZZTZCCB_OF",
+              "column": [
+                "LSH",
+                "BXJGDM",
+                "BXJGMC",
+                "TZZHDM",
+                "TZZHMC",
+                "ZCDM",
+                "ZCMC",
+                "JCZCBZ",
+                "JCZCDM",
+                "JCZCMC",
+                "CPDM",
+                "CPDMFFJGMC",
+                "ZCLX",
+                "ZCDL",
+                "YSZCDQR",
+                "CCBZ",
+                "YXZBZ",
+                "JWTZBZ",
+                "FQFXCPBZ",
+                "FQFXCPTYSBH",
+                "GZFF",
+                "KJHSFF",
+                "KJFL",
+                "CB",
+                "ZMYE",
+                "JZZB",
+                "ZMJZ",
+                "ZZHJZCBZ",
+                "YSLX",
+                "YSGL",
+                "GYJZ",
+                "GYJZBD",
+                "GYJZBDSY",
+                "YSXSY",
+                "QTSY",
+                "JRQTZHSYDDQGYJZBD",
+                "ZCJZSS",
+                "ZCWBXYPJ",
+                "ZCWBXYPJJGMC",
+                "ZCWBXYPJRQ",
+                "ZTWBXYPJ",
+                "ZTWBXYPJJGMC",
+                "ZTWBXYPJRQ",
+                "WJFL",
+                "WJFLSJ",
+                "YQBZ",
+                "YQRQ",
+                "ZQBZ",
+                "ZQRQ",
+                "ZQCS",
+                "KJQJ",
+                "SJZQ",
+                "CJRQ",
+                "C_SOURCEDETAILS"
+              ],
+              "additive_attr": {"C_SOURCEDETAILS": "ZOFUND"},
+              "session": [
+                "set session sql_mode='ANSI'"
+              ],
+              "pre_sql": [
+                "delete from ETL_EAST2_ZZTZCCB_OF a where a.C_SOURCEDETAILS = 'ZOFUND'"
+              ],
+              "post_sql": [
+                "call P_INF_EAST2_ZZTZCCB_OF('$bizDate', 'ZOFUND')"
+              ],
+              "db_config": {
+                "host": "127.0.0.1",
+                "port": 3306,
+                "user": "IEAST_USER",
+                "password": "ENC(3ff76e07f450ac0f4a33dd70959293a7640b7c811226e2b41b5d5b37941d69fb)",
+                "database": "IEAST"
+              }
+            }
+          }
+      }
+    ]
+  }
+}
