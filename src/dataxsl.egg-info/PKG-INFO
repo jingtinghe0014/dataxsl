@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: dataxsl
+Version: 1.0.0
+Home-page: 
+Author: carlostevez
+Author-email: tevez0014@163.com
+License: APACHE 2.0
+License-File: LICENSE
+Dynamic: author
+Dynamic: author-email
+Dynamic: license
+Dynamic: license-file

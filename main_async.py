@@ -9,8 +9,7 @@ DATA_XSL_VERSION = '1.0'
 
 def print_copyright():
     print('''
-data_xsl (%s), From TaiPingFinTech !
-Copyright (C) 2024-2025, Carlos Tevez. All Rights Reserved.
+data_xsl (%s), Carlos Tevez. All Rights Reserved.
     ''' % DATA_XSL_VERSION)
     sys.stdout.flush()
 
