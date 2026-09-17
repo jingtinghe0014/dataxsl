@@ -36,7 +36,7 @@ class ExcelReader(Reader):
         :type chunk_size: 分片读取数据，数据片大小
         :type parallel: 并行度，指定读取线程对应多少个并行写入线程
         :type header: 数据头对应的列，数字从0 开始
-        :type skip_rows: 忽略部分行，如果存在多重表头需要忽略相关列
+        :type skip_rows: 忽略部分行，如果存在多重表头需要忽略相关行
         :type use_cols: 如果只需要导入部分列则需要指定该参数
         :type encode: 如果存在特殊编码需要特殊指定，目前暂时无用
         :type ins_row_num: 是否将行号插入dataframe，默认不加载行号

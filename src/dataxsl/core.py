@@ -210,9 +210,11 @@ class DataXslContext:
         if self.reader_config['column']:
             self.reader_config.pop('column')
 
-        # 如果设定了 channel 和 parallel 则需要做相关配置
+        # 如果设定了 channel、queue_size 和 parallel 则需要做相关配置
         if sf_config['job']['setting']['channel'] is not None:
             self.process_config['channel'] = sf_config['job']['setting']['channel']
+        if sf_config['job']['setting']['queue_size'] is not None:
+            self.process_config['queue_size'] = sf_config['job']['setting']['queue_size']
         if sf_config['job']['setting']['parallel'] is not None:
             self.reader_config['parallel'] = sf_config['job']['setting']['parallel']
 
