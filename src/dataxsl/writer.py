@@ -4,7 +4,7 @@ from multiprocessing import Queue
 # 5. 定义抽象基类 Writer
 class Writer(ABC):
     @abstractmethod
-    def writer_parallel(self,queue:Queue):
+    def write_parallel(self,queue:Queue):
         pass
 
     @abstractmethod

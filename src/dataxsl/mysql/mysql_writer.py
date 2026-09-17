@@ -110,7 +110,7 @@ class MySQLWriter(Writer):
             logger.error(f"Unexpected error: {e}", exc_info=True)
 
 
-    def writer_parallel(self,queue:Queue):
+    def write_parallel(self,queue:Queue):
 
         conn = pymysql.connect(**self.db_config)
         try:

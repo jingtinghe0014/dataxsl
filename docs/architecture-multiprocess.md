@@ -11,7 +11,7 @@ DataXSL 的原始定位是**离线数据转换工具**：通过本地 JSON 作�
 
 - 当前主要实现路径是 Excel / 分隔文本到 MySQL；Excel 读取包含密码文件解密、表头识别、选列和空值处理。
 - 插件通过抽象基类与注册器解耦，但目前只有 `excel_reader`、`text_reader`、`mysql_writer` 完成注册且具备实质逻辑。
-- 执行器按“一生产者、多消费者”编写；主入口配置传递存在缺口，实际默认执行一个 Reader 和一个 Writer。
+- 执行器按“一生产者、多消费者”编写；主入口的 `parallel` 配置传递仍存在缺口，实际默认执行一个 Reader 和一个 Writer。`queue_size` 已正确传入执行器。
 - 转换能力分布在 Reader 和 Writer 内部，没有独立的 Transformer 层。
 - 当前是单机、单次作业工具。源码没有作业调度服务、DAG 编排、状态持久化、断点续传或分布式执行实现。
 
@@ -105,15 +105,15 @@ flowchart TD
 
 `DataProcessor.process_data()` 创建 `ProcessPoolExecutor(max_workers=parallel + 1)`，提交一个 Reader 任务和 `parallel` 个 Writer 任务。另有 `Manager()` 服务进程承载共享队列。
 
-这里源码用 `parallel` 创建 Writer **进程**，符合作者对非异步入口“一读进程对 N 写进程”的设计。当前需要修复配置传递。按最新设计，本模型不再引入 Channel 对象、按键分片器或多通道执行器。
+这里源码用 `parallel` 创建 Writer **进程**，符合作者对非异步入口“一读进程对 N 写进程”的设计。当前仍需修复 `parallel` 的配置传递。按最新设计，本模型不再引入 Channel 对象、按键分片器或多通道执行器。
 
-但 `DataXslContext.parse()` 没有把 `job.setting.parallel` 写入 `process_config.parallel`，只赋给 Reader；`queue_size` 也没有从作业配置传给执行器。
+`DataXslContext.parse()` 已将非空的 `job.setting.queue_size` 写入 `process_config.queue_size`，通过 `DataProcessor(reader, writer, **process_config)` 传入执行器，最终用于 `manager.Queue(self.queue_size)`。`parallel` 目前仍只赋给 Reader，没有写入 `process_config.parallel`。
 
 | 配置 | 源码中的实际去向 | 当前主入口效果 |
 | --- | --- | --- |
 | `job.setting.channel` | `process_config.channel` | DataProcessor 不读取，无执行效果 |
 | `job.setting.parallel` | `reader_config.parallel` | 控制 Reader 发送的结束标记数；不改变 Writer 进程数 |
-| `job.setting.queue_size` | 未读取 | 执行器仍使用默认 10 |
+| `job.setting.queue_size` | `process_config.queue_size` → `DataProcessor.queue_size` | 按配置值创建队列；显式为 `null` 时保留默认 10 |
 | Reader `chunk_size` | 传给 Reader 构造器 | 控制每批行数，默认 1000 |
 | `process_config.parallel` | DataProcessor 读取 | Context 默认 1 且未由 Job 更新，故通常只有一个 Writer |
 
@@ -277,7 +277,7 @@ python main.py -job /path/to/job.json -p biz_date=2026-09-15
 | 优先级 | 问题 | 影响与建议 |
 | --- | --- | --- |
 | P0 | JSON Schema 多处将 `type` 写为 `convert_type`，校验失败仅记日志 | 类型约束未生效且非法配置可继续运行；修正 schema 并在预处理前阻断错误 |
-| P0 | 并发与队列参数传递缺失，结束标记数与消费者数可不一致 | 调优无效，极端配置可能阻塞；统一消费者数来源并验证正整数范围 |
+| P0 | `parallel` 未传给执行器，结束标记数与消费者数可不一致 | 写并发配置无效，极端配置可能阻塞；统一消费者数来源并验证正整数范围。`queue_size` 传递已修正 |
 | P0 | 先等待 Reader，队列操作无超时、取消及故障广播 | Writer 提前失败后 Reader 可能因队列满永久等待；加入任务监督与退出协议 |
 | P0 | `pre_sql` / `post_sql` 部分异常只记录日志，普通文本读取也可能吞错 | 作业可能错误地报告成功；统一错误传播与退出码。数据库连接失败时，回滚分支还可能引用未赋值连接 |
 | P1 | 逐批提交，没有作业级原子发布或幂等策略 | 中途失败留下部分数据，重跑可能重复；按业务选择暂存表发布或业务键去重 |
@@ -320,7 +320,7 @@ flowchart TD
 
 ### 9.2 参数、队列与失败协议
 
-1. 将 `parallel`、`queue_size` 正确传给执行器，校验为正整数；结束通知数量依据实际写进程数量统一产生。
+1. 修复 `parallel` 向执行器的传递，保留已修正的 `queue_size` 传递；两者校验为正整数，结束通知数量依据实际写进程数量统一产生。
 2. `channel` 只兼容单流水线配置，不用于创建额外进程组；不静默接受多通道配置。
 3. 保留有界的进程间队列。队列满时生产者等待，空时消费者等待；无需为此引入事件循环。
 4. 数据消息、结束消息与故障信号可区分。进程间对象必须可序列化，连接在所属进程内创建。
@@ -354,10 +354,12 @@ flowchart TD
 - 阅读主入口、同步核心、全部同步插件、日志配置、包定义及脚本参数结构。
 - 对 `src/` 下 Python 文件执行 AST 解析，通过语法检查。
 - 在临时目录导入同步源码，确认两个 Reader 和一个 Writer 已注册。
-- 阻断实际构建执行后，验证配置 `channel=3 / parallel=4 / queue_size=2` 得到执行参数 `channel=3 / parallel=1 / queue_size=10`，Reader 的 `parallel=4`。
+- 阻断实际构建执行后，当时验证配置 `channel=3 / parallel=4 / queue_size=2` 得到执行参数 `channel=3 / parallel=1 / queue_size=10`，Reader 的 `parallel=4`。其中 queue_size 未传递的问题已在后续源码中修正，见下方复核记录。
 - 验证 `_validate({})` 只记录失败；用临时 gzip 文件确认 TextReader 返回 `AttributeError`。
 - 检查 16 份 JSON 样例，确认其中 9 份为空、7 份可解析；当时未发现 Python 自动化测试文件。
 
 2026-09-16 将原综合架构文件拆分为两份独立方案，并检查文档链接、章节和 JSON 示例。此前的运行验证没有在本轮重新执行。未连接业务数据库、执行导入或开展性能压测；仅调整文档，没有修改程序逻辑。
 
 2026-09-17 根据确认方案收敛为无 channel 分片的单条多进程流水线，更新目标架构和验收项；历史源码分析保留，未重新执行业务验证。
+
+2026-09-17 根据作者反馈静态复核 queue_size 的完整传递链：Job setting → Context.process_config → DataProcessor.queue_size → Manager.Queue。确认队列容量已使用传入值，同步更新参数表、问题清单及编码计划；未修改运行代码或执行业务导入。

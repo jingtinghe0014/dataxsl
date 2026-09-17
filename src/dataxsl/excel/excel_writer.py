@@ -18,5 +18,5 @@ class ExcelWriter(Writer):
     def post_deal(self):
         pass
 
-    def writer_parallel(self, queue:Queue):
+    def write_parallel(self, queue:Queue):
         return "Writer data to Excel filer", None
