@@ -1,8 +1,6 @@
 """One reader process and N writer processes, with bounded failure cleanup."""
 import logging
-import math
 import multiprocessing as mp
-import time
 import tempfile
 from contextlib import contextmanager
 from logging.handlers import QueueListener
@@ -11,13 +9,16 @@ from multiprocessing.process import BaseProcess
 from multiprocessing.synchronize import Event
 from typing import Any, Literal, TypedDict, cast
 
+import math
+import time
+
 from dataxsl.config import JOB_SCHEMA, load_job, positive_integer, validate_job
 from dataxsl.logging_config import LoggingManager
-from dataxsl.register import PluginRegistry
 from dataxsl.reader import Reader
-from dataxsl.writer import Writer
+from dataxsl.register import PluginRegistry
 from dataxsl.runtime import WorkerError, WorkerResult, WorkerRole, WorkerTiming, worker_entry
-from dataxsl.utils import LEGACY_KEY as key, redact
+from dataxsl.utils import redact
+from dataxsl.writer import Writer
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class DataProcessor:
         finally:
             self.timings[phase] = time.perf_counter() - started
 
-    def start(self) -> JobResult:
+    def start(self) -> JobResult | None:
         self.result = None
         self.timings = {}
         self.reader_init_timings = {}

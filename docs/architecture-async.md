@@ -1,6 +1,6 @@
 # DataXSL 异步混合模型架构方案
 
-> 更新日期：2026-09-17。本文记录已确认的编码目标：协程调度、独立通道进程、通道内有界异步队列和一读多写线程。目标尚未实现；第 2 节保留 2026-09-16 对 `main_async.py` / `src/aiodataxsl` 的源码分析，不表示已按此方案改造。
+> 更新日期：2026-09-18。本文记录已确认的编码目标：协程调度、独立通道进程、通道内有界异步队列和一读多写线程。目标尚未实现；第 2 节保留 2026-09-16 对 `main_async.py` / `src/aiodataxsl` 的源码分析，并同步当前同步插件的复用边界，不表示异步链路已完成。
 > 简单转换使用 [多进程模型](architecture-multiprocess.md)，该模型不按 channel 分片。
 
 ## 1. 定位与已确认决策
@@ -36,7 +36,7 @@ DataXSL 是离线数据转换工具。异步入口面向按键分片及高并发
 | `src/aiodataxsl/logging_config.py`、`error.py` | 日志配置加载及参数异常 |
 | `setup.py` | 显式包列表目前只包含同步 `dataxsl` 包，异步包发布方式需补齐 |
 
-同步包中的 ExcelReader、TextReader 和 MySQLWriter 可以作为后续复用候选，但目前缺少适配与装配链路，不能据此宣称异步版已经支持这些完整数据路径。
+同步包当前实现了 ExcelReader、MySQLWriter 和 PostgreSQLWriter，两种数据库 Writer 分别直接实现 Writer 接口，独立维护校验、连接和写入流程。它们可以作为后续适配候选，但目前缺少逐批线程适配与装配链路，不能据此宣称异步版已经支持这些完整数据路径。TextReader 已不在当前同步包中；PostgreSQL Reader 尚未实现，同步 PostgreSQL Writer 也未接入异步注册器。
 
 ### 2.1 当前入口的实际行为
 
@@ -297,11 +297,24 @@ async def consume(writer, queue):
 
 ### 8.2 插件与接口迁移
 
-- 从同步插件提取逐批读写能力，再接入线程适配层；现有 `read_parallel(queue)` / `writer_parallel(queue)` 长循环不能直接接到 asyncio.Queue。
+- 从同步插件提取逐批读写能力，再接入线程适配层；现有 `read_parallel(queue)` / `write_parallel(queue)` 长循环不能直接接到 asyncio.Queue。
 - 确定 EOF、空批次、异常、批次写入成功和关闭失败的统一返回/异常契约。
 - 保留 CLI 已声明的 `--job` / `--param`，补齐 await、参数模板严格校验及失败退出码。
-- 统一依赖、Python 版本范围和打包方式；现有 setup.py 尚未包含完整异步包及运行依赖。
+- 沿用项目 Python 3.12+ 运行基线，统一依赖和打包方式；现有 setup.py 尚未包含完整异步包及运行依赖。
 - 队列终止方案以正常 END 和失败取消为基线，不默认依赖特定新版本的 Queue.shutdown 接口。
+
+#### MySQL / PostgreSQL Writer 复用边界
+
+以下为待实现的迁移要求，不代表当前已有 write_batch 适配接口：
+
+- 分别适配 MySQLWriter、PostgreSQLWriter 自身的参数 Schema、按位置取值、附加字段和类型转换规则；源字段名不参与目标字段重排。
+- 将现有 write_parallel 内的单批转换、executemany、commit 和成功计数提取为逐批调用能力。asyncio.Queue 的 get/put 仍由协程操作，写线程只接收已领取的批次。
+- 每个 WriterWorker 在自身专属线程创建、使用、回滚和关闭连接；MySQL 与 PostgreSQL 都保持每写线程独立连接和事务。不能把主进程前后 SQL 的连接传给通道或线程。
+- 作业级 pre_sql 由主协调进程执行一次，post_sql 仅在全部通道成功后执行一次；session 在各自新建连接上执行。失败不会撤销其他线程已提交的批次。
+- PostgreSQL 保持同步 Psycopg 3 调用并交给专属写线程，与既定混合模型一致。安装 Psycopg 3 不会自动启用异步连接或完成协程适配。
+- 保留两种数据库的配置差异：PostgreSQL 的 database/dbname 互斥、标识符双引号及连接超时规则；SQL 超时通过 session/options 或服务端配置，不能直接套用 MySQL 的 read_timeout/write_timeout。
+
+后续 Iceberg、Hadoop、Greenplum 等连接器同样按各自能力适配逐批调用及资源清理。线程调度层只协调调用、结果和生命周期，提交或发布策略由连接器自行定义；不把 SQL 或数据库事务作为所有连接器的统一前提。上述连接器均为后续扩展目标。
 
 ### 8.3 日志与监控
 
@@ -341,5 +354,7 @@ async def consume(writer, queue):
 2026-09-16 静态核对异步入口、核心、抽象接口与 ExcelReader，记录第 2 节的实现缺口，未执行异步业务导入。
 
 2026-09-17 按确认方案补齐独立通道进程、有界异步队列、固定一读多写线程、逐批调度骨架、错误退出和验收清单，并同步修订多进程版及导航的职责边界。
+
+2026-09-18 同步多进程版新增独立 PostgreSQLWriter 的现状，更新同步插件清单、write_parallel 接口名称及后续线程适配要求，明确各连接器独立实现提交和清理语义。PostgreSQL Writer 当前仅用于 main.py，数据库 Reader 和异步数据库写入仍待实现。
 
 本轮仅修改架构文档，检查链接、章节、代码块和 JSON 示例；没有修改运行代码、连接业务数据库或开展性能压测。方案与验收项用于指导后续编码，不表示现有代码已满足要求。

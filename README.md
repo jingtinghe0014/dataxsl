@@ -17,6 +17,8 @@ personal ETL tool transfers data from one medium to another.
 
 ## 多进程版运行与验证
 
+运行环境要求 **Python 3.12 及以上版本**，安装包通过 `python_requires >=3.12` 声明最低版本。当前回归验证环境为 Python 3.12.7。
+
 ```bash
 python -m pip install -e .
 # 设置 DB_HOST / DB_USER / DB_PASSWORD / DB_NAME 后使用公开示例。
@@ -24,4 +26,29 @@ python main.py -job examples/excel-to-mysql.json -p input_path=/path/to/input.xl
 PYTHONPATH=src python -B -m unittest discover -s tests/unit -t . -v
 ```
 
-当前可用链路为 Excel → MySQL。多进程版已加入严格校验、故障退出、资源清理和读写列数检查（字段按位置对应）；异步版仍处于规划阶段。数据库操作按批次提交，失败不会撤销此前已提交的批次。
+当前可用链路为 Excel → MySQL / PostgreSQL。多进程版已加入严格校验、故障退出、资源清理和读写列数检查（字段按位置对应）；异步版仍处于规划阶段。数据库操作按批次提交，失败不会撤销此前已提交的批次。
+
+### PostgreSQL 写入
+
+安装命令会同时安装 Psycopg 3 驱动。配置示例见 [excel-to-postgresql.json](examples/excel-to-postgresql.json)，使用 `postgresql_writer`，仍为 1 个读进程 + `parallel` 个独立写进程。支持 MySQL Writer 相同的 `pre_sql`、`post_sql`、`session`、`additive_attr`、`column_types`，字段按位置对应。
+
+```sql
+-- 在测试数据库事先创建目标表。
+CREATE TABLE public.etl_demo (
+    account text,
+    amount numeric,
+    biz_date date
+);
+```
+
+```bash
+# 设置 PostgreSQL 的 DB_HOST / DB_USER / DB_PASSWORD / DB_NAME。
+python main.py -job examples/excel-to-postgresql.json \
+  -p input_path=/path/to/input.xlsx -p biz_date=2026-09-18
+```
+
+`table` 可写 `表名` 或 `schema.表名`，大小写按配置原样保留；`column` 填实际字段名，无需自行加引号。数据库名使用 `database` 或 `dbname`，不能同时配置。`connect_timeout` 默认 10 秒；SQL 执行超时通过 `session` 设置 `statement_timeout`（示例为 30 秒），不使用 MySQL 的 `read_timeout` / `write_timeout` / `charset`。目前仅支持 INSERT，尚未实现 PostgreSQL Reader。
+
+`db_config.schema` 可选，例如 `"schema": "test"`。它为未限定的 `table` 补充 schema，并在每个连接执行 `session` 之前设置 `search_path`，因此 `pre_sql`、`post_sql` 中未限定的表也会在该 schema 中查找。示例使用 `table: "etl_demo"` 和 `schema: "public"`，目标仍为 public.etl_demo。已限定的 `table` 优先采用其自身 schema；未配置时保留连接原有的 search_path。schema 必须是非空名称，目标 schema 和表需事先存在。
+
+`pre_sql`、`post_sql`、`session` 原样执行；显式设置 search_path 的 session SQL 可以覆盖初始配置。若真实表名和列名为大写，手写 SQL 也要加双引号，如 `DELETE FROM "test"."ETL_DEMO" WHERE "C_SOURCEDETAILS" = 'demo'`；若数据库实际名称为小写，则 table/column 配置使用小写。参见 [PostgreSQL 标识符规则](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)。

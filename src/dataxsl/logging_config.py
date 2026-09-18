@@ -7,6 +7,15 @@ from pathlib import Path
 import yaml
 
 
+class DataxslDebugFilter(logging.Filter):
+    """Keep dependency logs at INFO and above, while allowing dataxsl DEBUG."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return (record.levelno >= logging.INFO
+                or record.name == 'dataxsl'
+                or record.name.startswith('dataxsl.'))
+
+
 class LoggingManager:
     """Only the parent owns file handlers; workers forward records to it."""
     _initialized = False
@@ -35,6 +44,14 @@ class LoggingManager:
         except Exception:
             cls._setup_fallback_logging()
             logging.warning('Unable to load logging configuration; using console logging')
+        # Handler filters also apply to propagated records and QueueListener output;
+        # a filter on the root logger alone would not cover either case.
+        loggers = [logging.getLogger(), *logging.Logger.manager.loggerDict.values()]
+        for logger in loggers:
+            if isinstance(logger, logging.Logger):
+                for handler in logger.handlers:
+                    if not any(isinstance(item, DataxslDebugFilter) for item in handler.filters):
+                        handler.addFilter(DataxslDebugFilter())
         cls._initialized = True
 
     @classmethod
@@ -49,7 +66,10 @@ class LoggingManager:
         for handler in root.handlers[:]:
             root.removeHandler(handler)
             handler.close()
-        root.addHandler(QueueHandler(queue))
+        handler = QueueHandler(queue)
+        # Discard dependency DEBUG before serializing or sending it to the parent.
+        handler.addFilter(DataxslDebugFilter())
+        root.addHandler(handler)
         root.setLevel(level)
         cls._initialized = True
 
