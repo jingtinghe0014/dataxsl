@@ -1,10 +1,10 @@
-
-class MissingParameterError(Exception):
+class MissingParameterError(ValueError):
     def __init__(self, param_name):
         self.param_name = param_name
-        super().__init__(f"The parameter '%s' is missing.", param_name)
+        super().__init__(f"The parameter '{param_name}' is missing.")
 
-class ParameterTypeError(Exception):
+
+class ParameterTypeError(ValueError):
     def __init__(self, param_name):
         self.param_name = param_name
-        super().__init__(f"The parameter '%s' type is error.", param_name)
+        super().__init__(f"The parameter '{param_name}' has an invalid type.")

@@ -1,56 +1,39 @@
-# logging.yaml
 version: 1
-disable_existing_loggers: False
-
+disable_existing_loggers: false
 formatters:
   standard:
-    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format: '%(asctime)s - [%(processName)s PID=%(process)d] - %(name)s - %(levelname)s - %(message)s'
   detailed:
-    format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
-
+    format: '%(asctime)s - [%(processName)s PID=%(process)d] - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] -
+      %(message)s'
 handlers:
   console:
     class: logging.StreamHandler
     level: INFO
     formatter: standard
     stream: ext://sys.stdout
-
   file_handler:
     class: logging.handlers.TimedRotatingFileHandler
-    level: DEBUG
+    level: INFO
     formatter: detailed
-    filename: /logs2/data_xsl.log
+    filename: logs/data_xsl.log
     when: midnight
     interval: 1
     backupCount: 30
     encoding: utf8
-
   error_file_handler:
     class: logging.handlers.TimedRotatingFileHandler
     level: ERROR
     formatter: detailed
-    filename: /logs2/errors.log
+    filename: logs/errors.log
     when: midnight
     interval: 1
     backupCount: 30
     encoding: utf8
-
-loggers:
-  my_application:  # 你的应用程序的日志记录器
-    level: DEBUG
-    handlers: [console, file_handler, error_file_handler]
-    propagate: no
-
-  my_package:  # 你开发的包的日志记录器
-    level: INFO
-    handlers: [console, file_handler, error_file_handler]
-    propagate: no
-
-  third_party_package:  # 第三方包的日志记录器
-    level: WARNING
-    handlers: [console, file_handler]
-    propagate: no
-
-root:  # 根记录器，捕获所有未明确配置的记录器
-  level: WARNING
-  handlers: [console]
+loggers: {}
+root:
+  level: DEBUG
+  handlers:
+  - console
+  - file_handler
+  - error_file_handler

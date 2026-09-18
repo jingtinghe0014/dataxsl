@@ -1,10 +1,9 @@
-from abc import abstractmethod, ABC
-from multiprocessing import Queue
+from abc import ABC, abstractmethod
 
-# 5. 定义抽象基类 Writer
+
 class Writer(ABC):
     @abstractmethod
-    def write_parallel(self,queue:Queue):
+    def write_parallel(self, queue):
         pass
 
     @abstractmethod
@@ -17,4 +16,10 @@ class Writer(ABC):
 
     @abstractmethod
     def validate(self):
+        pass
+
+    def validate_columns(self, columns):
+        """Check source columns without I/O; may run in the reader child."""
+
+    def cleanup(self):
         pass

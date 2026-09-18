@@ -14,3 +14,14 @@ personal ETL tool transfers data from one medium to another.
 
 - [多进程模型架构方案](docs/architecture-multiprocess.md)：单条流水线的执行流程、插件、配置与改进计划。
 - [异步混合模型架构方案](docs/architecture-async.md)：通道进程、非阻塞调度、逐批线程读写、故障处理及编码验收清单。
+
+## 多进程版运行与验证
+
+```bash
+python -m pip install -e .
+# 设置 DB_HOST / DB_USER / DB_PASSWORD / DB_NAME 后使用公开示例。
+python main.py -job examples/excel-to-mysql.json -p input_path=/path/to/input.xlsx -p biz_date=2026-09-17
+PYTHONPATH=src python -B -m unittest discover -s tests/unit -t . -v
+```
+
+当前可用链路为 Excel → MySQL。多进程版已加入严格校验、故障退出、资源清理和读写列数检查（字段按位置对应）；异步版仍处于规划阶段。数据库操作按批次提交，失败不会撤销此前已提交的批次。
