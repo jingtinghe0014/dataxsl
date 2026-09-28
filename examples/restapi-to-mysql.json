@@ -1,0 +1,31 @@
+{
+  "job": {
+    "setting": {"channel": 1, "parallel": 2, "queue_size": 10},
+    "content": [{
+      "reader": {
+        "name": "restapi_reader",
+        "parameter": {
+          "url": "${API_URL}", "method": "POST", "response_type": "json",
+          "headers": {"Content-Type": "application/json;charset=UTF-8"},
+          "Authorization": {
+            "auth_type": "basic", "auth_url": "${AUTH_URL}/{auth_username}/{auth_password}", "method": "GET",
+            "auth_username": "${API_USERNAME}", "auth_password": "${API_PASSWORD}",
+            "token_path": "data.Authorization", "token_header": "Authorization", "token_prefix": ""
+          },
+          "json_path": "data.data", "requestParam": "pageSize=1000",
+          "pagination": {"total": "data.total", "pageSize": "data.pageSize", "pageNum": "data.pageNum"},
+          "batch_size": 1000, "read_timeout": 60000, "max_retry": 3, "backoff_factor": 1, "encode": "utf-8",
+          "column": [{"index": "0", "type": "string"}, {"index": "1", "type": "decimal"}]
+        }
+      },
+      "writer": {
+        "name": "mysql_writer",
+        "parameter": {
+          "writerMode": "insert", "table": "etl_demo", "column": ["account", "amount"],
+          "db_config": {"host": "${DB_HOST}", "port": 3306, "user": "${DB_USER}",
+                        "password": "${DB_PASSWORD}", "database": "${DB_NAME}", "charset": "utf8mb4"}
+        }
+      }
+    }]
+  }
+}

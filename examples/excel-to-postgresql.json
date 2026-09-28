@@ -1,0 +1,31 @@
+{
+  "job": {
+    "setting": {"channel": 1, "parallel": 4, "queue_size": 10},
+    "content": [{
+      "reader": {
+        "name": "excel_reader",
+        "parameter": {
+          "path": "${input_path}", "sheet_name": "Sheet1",
+          "header": 0, "chunk_size": 1000, "use_cols": [0, 1]
+        }
+      },
+      "writer": {
+        "name": "postgresql_writer",
+        "parameter": {
+          "writerMode": "insert", "table": "etl_demo",
+          "column": ["account", "amount", "biz_date"],
+          "column_types": {"account": "string", "amount": "decimal", "biz_date": "date"},
+          "additive_attr": {"biz_date": "${biz_date}"},
+          "pre_sql": [], "post_sql": [],
+          "session": ["SET statement_timeout = '30s'"],
+          "db_config": {
+            "host": "${DB_HOST}", "port": 5432,
+            "user": "${DB_USER}", "password": "${DB_PASSWORD}",
+            "database": "${DB_NAME}", "schema": "public", "connect_timeout": 10,
+            "application_name": "dataxsl"
+          }
+        }
+      }
+    }]
+  }
+}

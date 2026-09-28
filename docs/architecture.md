@@ -1,6 +1,6 @@
 # DataXSL 架构文档导航
 
-> 更新日期：2026-09-18。同步 PostgreSQL Writer、独立连接器的设计边界及两种执行模型的实现状态。
+> 更新日期：2026-09-28。同步 Oracle Writer、REST API Reader、独立连接器的设计边界及两种执行模型的实现状态。
 
 项目统一以 **Python 3.12+** 为运行基线；多进程版按此声明安装要求，异步模型后续实现沿用同一版本基线。
 
@@ -14,18 +14,20 @@
 | 能力 | 多进程模型 | 异步混合模型 |
 | --- | --- | --- |
 | Excel 读取 | 已实现 `excel_reader` | 草稿，完整链路待实现 |
+| REST API 读取 | 已实现 `restapi_reader`，Token 认证、分页和分批输出 | 待实现逐批线程适配 |
 | MySQL 写入 | 已实现 `mysql_writer` | 待实现线程适配与装配 |
 | PostgreSQL 写入 | 已实现 `postgresql_writer`，使用 Psycopg 3 同步连接 | 待实现线程适配与装配 |
+| Oracle 写入 | 已实现 `oracle_writer`，使用 python-oracledb 同步连接 | 待实现线程适配与装配 |
 | 数据库读取 | 尚未实现可用 Reader，PostgreSQL 本阶段仅支持写入 | 按键分片及 Reader 均为后续目标 |
 | 执行单元与队列 | 1 个读进程 + N 个写进程，共享有界阻塞队列 | 目标为每通道 1 个读线程 + N 个写线程，由协程操作通道独立的有界异步队列 |
 
-多进程版的 MySQLWriter 与 PostgreSQLWriter 分别直接实现 Writer 接口，各自负责参数校验、字段处理、连接、批次写入、提交、异常清理和计时。保留独立实现，方便各连接器后续演进；每个写进程独立创建和使用资源。
+多进程版的 MySQLWriter、PostgreSQLWriter 与 OracleWriter 分别直接实现 Writer 接口，各自负责参数校验、字段处理、连接、批次写入、提交、异常清理和计时。保留独立实现，方便各连接器后续演进；每个写进程独立创建和使用资源。
 
 后续 Iceberg、Hadoop、Greenplum 等连接器按各自目标存储的能力实现 Reader / Writer 接口。公共接口只约束生命周期、批次传递、结果与清理，不统一要求 SQL、游标或数据库事务；配置及提交语义由具体连接器定义。这些连接器尚未实现。
 
 主进程保持 `validate → pre_deal → process_data → post_deal → invoke_hook` 顺序，失败即停止后续业务步骤，所有路径均清理资源。前后 SQL 和各数据批次分别提交，后续失败不会整体回滚已提交的数据。
 
-运行示例：[Excel → MySQL](../examples/excel-to-mysql.json)、[Excel → PostgreSQL](../examples/excel-to-postgresql.json)。两份示例均使用 `main.py`；异步版尚无可用的对应执行链路。
+运行示例：[Excel → MySQL](../examples/excel-to-mysql.json)、[Excel → PostgreSQL](../examples/excel-to-postgresql.json)、[Excel → Oracle](../examples/excel-to-oracle.json)、[REST API → MySQL](../examples/restapi-to-mysql.json)。均使用 `main.py`；异步版尚无可用的对应执行链路。REST 认证和分页配置详见 [REST API Reader](restapi-reader.md)。
 
 ## 两种模型的边界
 

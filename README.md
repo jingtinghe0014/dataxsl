@@ -26,7 +26,27 @@ python main.py -job examples/excel-to-mysql.json -p input_path=/path/to/input.xl
 PYTHONPATH=src python -B -m unittest discover -s tests/unit -t . -v
 ```
 
-当前可用链路为 Excel → MySQL / PostgreSQL。多进程版已加入严格校验、故障退出、资源清理和读写列数检查（字段按位置对应）；异步版仍处于规划阶段。数据库操作按批次提交，失败不会撤销此前已提交的批次。
+当前可用链路为 Excel / REST API → MySQL / PostgreSQL / Oracle。多进程版已加入严格校验、故障退出、资源清理和读写列数检查（字段按位置对应）；异步版仍处于规划阶段。数据库操作按批次提交，失败不会撤销此前已提交的批次。
+
+### Excel 读取类型转换
+
+`reader.parameter.column` 按配置在数据入队前转换类型，例如：
+
+```json
+"column": [
+  {"index": "0", "type": "string"},
+  {"index": "1", "type": "decimal"},
+  {"index": "2", "type": "date", "format": "yyyyMMdd"}
+]
+```
+
+index 指插入 IDX、执行 use_cols 后的输出列位置，从 0 开始；类型配置不改变列顺序。未声明类型的列保持原行为，空值保留为 None，转换失败立即报错。已有 column 配置现在会生效，不再作为旧元数据忽略。Reader 已转换的字段一般无需在 Writer 重复配置类型；Writer 的 column_types 仍可用于附加常量字段。
+
+### REST API 读取
+
+`restapi_reader` 支持 GET/POST JSON 数据、用户名密码登录获取 Token（支持 URL 路径模板）、可配置 Token 节点/请求头/前缀、401 刷新、按响应元数据分页和跨页 DataFrame 分批。`read_timeout` 单位为毫秒，`max_retry` 为额外重试次数，`backoff_factor` 控制指数退避。
+
+完整说明见 [REST API Reader](docs/restapi-reader.md)，运行配置见 [REST API → MySQL](examples/restapi-to-mysql.json)。返回 `data.Authorization: "Bearer ..."` 时配置 `token_path: "data.Authorization"`、`token_prefix: ""`。仅实现读取，尚未实现 REST Writer。
 
 ### PostgreSQL 写入
 
@@ -52,3 +72,15 @@ python main.py -job examples/excel-to-postgresql.json \
 `db_config.schema` 可选，例如 `"schema": "test"`。它为未限定的 `table` 补充 schema，并在每个连接执行 `session` 之前设置 `search_path`，因此 `pre_sql`、`post_sql` 中未限定的表也会在该 schema 中查找。示例使用 `table: "etl_demo"` 和 `schema: "public"`，目标仍为 public.etl_demo。已限定的 `table` 优先采用其自身 schema；未配置时保留连接原有的 search_path。schema 必须是非空名称，目标 schema 和表需事先存在。
 
 `pre_sql`、`post_sql`、`session` 原样执行；显式设置 search_path 的 session SQL 可以覆盖初始配置。若真实表名和列名为大写，手写 SQL 也要加双引号，如 `DELETE FROM "test"."ETL_DEMO" WHERE "C_SOURCEDETAILS" = 'demo'`；若数据库实际名称为小写，则 table/column 配置使用小写。参见 [PostgreSQL 标识符规则](https://www.postgresql.org/docs/17/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS)。
+
+### Oracle 写入
+
+使用独立的 `oracle_writer`，配置见 [excel-to-oracle.json](examples/excel-to-oracle.json)，详细说明见 [Oracle Writer](docs/oracle-writer.md)。安装时会引入 `oracledb>=3.4,<4`；默认 Thin 模式，无需 Oracle Client，面向 Oracle Database 12.1+。当前仅实现同步多进程 INSERT。
+
+支持 `host + service_name`、`host + sid` 或 `dsn` 三种连接配置。`parallel` 个写进程分别建立连接，按 DataFrame 批次执行 `executemany` 并提交；支持 `pre_sql`、`post_sql`、`session`、`additive_attr`、`column_types` 和可选 `db_config.schema`。普通表名/列名按 Oracle 规则转大写，显式双引号名称保留大小写。字段按位置对应。
+
+```bash
+# 设置 DB_HOST / DB_USER / DB_PASSWORD / DB_SERVICE_NAME，预先创建目标表。
+python main.py -job examples/excel-to-oracle.json \
+  -p input_path=/path/to/input.xlsx -p biz_date=2026-09-28
+```

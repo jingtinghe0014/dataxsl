@@ -249,10 +249,6 @@ class DataXslContext:
         self.reader_config = content['reader']['parameter'].copy()
         self.writer_config = content['writer']['parameter'].copy()
         self.process_config = config['job']['setting'].copy()
-        # Legacy Excel metadata was never applied; do not silently start converting it.
-        if 'column' in self.reader_config:
-            self.reader_config.pop('column')
-            logger.warning('reader.column is legacy metadata; values are written in reader output order')
         self.reader_config.pop('parallel', None)
         return config
 

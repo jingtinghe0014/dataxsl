@@ -38,6 +38,8 @@ DataXSL 是离线数据转换工具。异步入口面向按键分片及高并发
 
 同步包当前实现了 ExcelReader、MySQLWriter 和 PostgreSQLWriter，两种数据库 Writer 分别直接实现 Writer 接口，独立维护校验、连接和写入流程。它们可以作为后续适配候选，但目前缺少逐批线程适配与装配链路，不能据此宣称异步版已经支持这些完整数据路径。TextReader 已不在当前同步包中；PostgreSQL Reader 尚未实现，同步 PostgreSQL Writer 也未接入异步注册器。
 
+2026-09-20 同步包新增独立 RestAPIReader（restapi_reader），通过 Requests 在读进程执行认证、分页和重试。其 Session、Token 缓存、单页读取与关闭需后续适配到专属读线程，不能直接在事件循环调用同步网络请求或退避 sleep。异步版尚未支持 REST API 链路，配置契约见 [REST API Reader](restapi-reader.md)。
+
 ### 2.1 当前入口的实际行为
 
 1. `asyncio.run(main())` 进入协程入口。
@@ -358,3 +360,5 @@ async def consume(writer, queue):
 2026-09-18 同步多进程版新增独立 PostgreSQLWriter 的现状，更新同步插件清单、write_parallel 接口名称及后续线程适配要求，明确各连接器独立实现提交和清理语义。PostgreSQL Writer 当前仅用于 main.py，数据库 Reader 和异步数据库写入仍待实现。
 
 本轮仅修改架构文档，检查链接、章节、代码块和 JSON 示例；没有修改运行代码、连接业务数据库或开展性能压测。方案与验收项用于指导后续编码，不表示现有代码已满足要求。
+
+2026-09-28 同步多进程版新增独立 OracleWriter（python-oracledb Thin）。当前仅用于 main.py，未接入异步注册器或线程写入模型。

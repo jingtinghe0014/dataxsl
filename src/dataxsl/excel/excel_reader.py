@@ -14,6 +14,7 @@ from python_calamine import CalamineWorkbook
 from dataxsl.config import validate_schema
 from dataxsl.reader import Reader
 from dataxsl.register import PluginRegistry
+from dataxsl.transform import TYPES, convert_value
 from dataxsl.utils import resolve_secret
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,14 @@ EXCEL_READER_SCHEMA = {
         'use_cols': {'anyOf': [
             {'type': 'null'}, {'type': 'array', 'minItems': 1, 'uniqueItems': True,
                               'items': {'type': 'integer', 'minimum': 0}}]},
+        'column': {'type': ['array', 'null'], 'items': {
+            'type': 'object', 'required': ['index'], 'additionalProperties': False,
+            'properties': {
+                'index': {'anyOf': [{'type': 'integer', 'minimum': 0},
+                                    {'type': 'string', 'pattern': r'^[0-9]+$'}]},
+                'type': {'enum': sorted(TYPES)}, 'format': {'type': 'string'},
+            },
+        }},
         # Retained legacy options do not control the reader engine.
         'parallel': {}, 'encode': {},
     },
@@ -45,7 +54,7 @@ class ExcelReader(Reader):
 
     def __init__(self, path=None, sheet_name=None, exl_password=None, chunk_size=1000,
                  parallel=1, header=0, skip_rows=None, use_cols=None, ins_row_num=False,
-                 encode='utf-8', **extra_config):
+                 encode='utf-8', column=None, **extra_config):
         self._extra_config = extra_config
         self.source_path = path
         self.file_path = path
@@ -58,6 +67,8 @@ class ExcelReader(Reader):
         self.use_cols = use_cols
         self.ins_row_num = ins_row_num
         self.encode = encode
+        self.column = column
+        self._column_converters = []
         self._temporary_path = None
         self._columns = None
         self.pre_timings = {}
@@ -83,8 +94,14 @@ class ExcelReader(Reader):
                   'chunk_size': self.chunk_size, 'header': self.header,
                   'ins_row_num': self.ins_row_num, 'skip_rows': self.skip_rows,
                   'use_cols': self.use_cols, 'parallel': self.parallel, 'encode': self.encode,
+                  'column': self.column,
                   **self._extra_config}
         validate_schema(config, self.schema, 'reader.parameter')
+        columns = self.column or []
+        if len({int(spec['index']) for spec in columns}) != len(columns):
+            raise ValueError('reader.parameter.column contains duplicate indexes')
+        if any('format' in spec and 'type' not in spec for spec in columns):
+            raise ValueError('reader.parameter.column format requires type')
         if not Path(self.source_path).is_file():
             raise ValueError('reader.path must name an existing file')
 
@@ -113,6 +130,14 @@ class ExcelReader(Reader):
                     if index == self.header:
                         self._header = list(row)
                         self._columns = self._select_columns(self._header)
+                        self._column_converters = []
+                        for spec in self.column or []:
+                            position = int(spec['index'])
+                            if position >= len(self._columns):
+                                raise ValueError('reader.parameter.column index exceeds output column count')
+                            if 'type' in spec:
+                                self._column_converters.append((position, {
+                                    key: value for key, value in spec.items() if key != 'index'}))
                         break
                 else:
                     raise ValueError('Configured header row does not exist')
@@ -166,14 +191,15 @@ class ExcelReader(Reader):
         return path
 
     @staticmethod
-    def _convert_cell(value):
+    def _convert_cell(value, definition=None):
         if value is None or (isinstance(value, str) and value == ''):
             return None
         if isinstance(value, float):
             if math.isnan(value):
                 return None
             if math.isfinite(value) and value.is_integer():
-                return int(value)
+                value = int(value)
+        # return convert_value(value, definition) if definition is not None else value
         return value
 
     def read_parallel(self, queue):
@@ -219,5 +245,11 @@ class ExcelReader(Reader):
             original = ([None] if self.ins_row_num else []) + cells
             if not any(original[i] is not None for i in business_indexes):
                 continue
+            for position, definition in self._column_converters:
+                try:
+                    selected[position] = self._convert_cell(selected[position], definition)
+                except Exception:
+                    raise ValueError(f'Excel conversion failed at worksheet row {index + 1}, '
+                                     f'output column index {position}, type {definition["type"]}') from None
             record_index += 1
             yield selected
