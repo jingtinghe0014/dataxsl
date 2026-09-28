@@ -26,7 +26,13 @@ python main.py -job examples/excel-to-mysql.json -p input_path=/path/to/input.xl
 PYTHONPATH=src python -B -m unittest discover -s tests/unit -t . -v
 ```
 
-当前可用链路为 Excel → MySQL / PostgreSQL。多进程版已加入严格校验、故障退出、资源清理和读写列数检查（字段按位置对应）；异步版仍处于规划阶段。数据库操作按批次提交，失败不会撤销此前已提交的批次。
+当前可用链路为 Excel / REST API → MySQL / PostgreSQL。多进程版已加入严格校验、故障退出、资源清理和读写列数检查（字段按位置对应）；异步版仍处于规划阶段。数据库操作按批次提交，失败不会撤销此前已提交的批次。
+
+### REST API 读取
+
+`restapi_reader` 支持 GET/POST JSON 数据、用户名密码登录获取 Token（支持 URL 路径模板）、可配置 Token 节点/请求头/前缀、401 刷新、按响应元数据分页和跨页 DataFrame 分批。`read_timeout` 单位为毫秒，`max_retry` 为额外重试次数，`backoff_factor` 控制指数退避。
+
+完整说明见 [REST API Reader](docs/restapi-reader.md)，运行配置见 [REST API → MySQL](examples/restapi-to-mysql.json)。返回 `data.Authorization: "Bearer ..."` 时配置 `token_path: "data.Authorization"`、`token_prefix: ""`。仅实现读取，尚未实现 REST Writer。
 
 ### PostgreSQL 写入
 

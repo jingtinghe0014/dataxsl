@@ -8,5 +8,6 @@ get_logger = LoggingManager.get_logger
 from .excel import excel_reader
 from .mysql import mysql_writer
 from .postgresql import postgresql_writer
+from .restapi import restapi_reader
 
-__all__ = ['LoggingManager', 'get_logger', 'excel_reader', 'mysql_writer', 'postgresql_writer']
+__all__ = ['LoggingManager', 'get_logger', 'excel_reader', 'mysql_writer', 'postgresql_writer', 'restapi_reader']

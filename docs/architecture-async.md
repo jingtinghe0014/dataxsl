@@ -38,6 +38,8 @@ DataXSL 是离线数据转换工具。异步入口面向按键分片及高并发
 
 同步包当前实现了 ExcelReader、MySQLWriter 和 PostgreSQLWriter，两种数据库 Writer 分别直接实现 Writer 接口，独立维护校验、连接和写入流程。它们可以作为后续适配候选，但目前缺少逐批线程适配与装配链路，不能据此宣称异步版已经支持这些完整数据路径。TextReader 已不在当前同步包中；PostgreSQL Reader 尚未实现，同步 PostgreSQL Writer 也未接入异步注册器。
 
+2026-09-20 同步包新增独立 RestAPIReader（restapi_reader），通过 Requests 在读进程执行认证、分页和重试。其 Session、Token 缓存、单页读取与关闭需后续适配到专属读线程，不能直接在事件循环调用同步网络请求或退避 sleep。异步版尚未支持 REST API 链路，配置契约见 [REST API Reader](restapi-reader.md)。
+
 ### 2.1 当前入口的实际行为
 
 1. `asyncio.run(main())` 进入协程入口。

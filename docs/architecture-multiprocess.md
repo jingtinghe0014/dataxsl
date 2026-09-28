@@ -1,10 +1,10 @@
 # DataXSL 多进程模型架构方案
 
-> 更新日期：2026-09-18。本篇描述 `main.py` / `src/dataxsl` 的当前实现，包含独立的 MySQL / PostgreSQL Writer 及后续连接器边界。异步混合模型仍是独立规划，见 [异步模型架构方案](architecture-async.md)。
+> 更新日期：2026-09-20。本篇描述 `main.py` / `src/dataxsl` 的当前实现，包含 Excel / REST API Reader、独立的 MySQL / PostgreSQL Writer 及后续连接器边界。异步混合模型仍是独立规划，见 [异步模型架构方案](architecture-async.md)。
 
 ## 1. 定位与运行模型
 
-DataXSL 是离线数据转换工具。简单多进程模型固定为**一条流水线：1 个读进程 + N 个写进程**，不按 channel 分片。目前可用插件是 ExcelReader、MySQLWriter 和 PostgreSQLWriter。
+DataXSL 是离线数据转换工具。简单多进程模型固定为**一条流水线：1 个读进程 + N 个写进程**，不按 channel 分片。目前可用插件是 ExcelReader、RestAPIReader、MySQLWriter 和 PostgreSQLWriter。
 
 | 配置 | 当前语义 |
 | --- | --- |
@@ -12,6 +12,7 @@ DataXSL 是离线数据转换工具。简单多进程模型固定为**一条流�
 | `queue_size=Q` | 进程间队列最多容纳 Q 个批次；默认 10 |
 | `channel` | 只支持 1；大于 1 时拒绝，并提示使用异步模型 |
 | Reader `chunk_size` | 每批输出行数，默认 1000 |
+| REST Reader `batch_size` | 每个 DataFrame 的最大行数，默认 1000；独立于 API pageSize |
 | `job.content` | 必须恰好有一组 Reader / Writer，不再静默忽略后续项 |
 
 `parallel`、`queue_size`、`chunk_size` 必须为正整数，不接受布尔值。缺省 setting 使用默认值；为兼容旧配置，setting 的三个运行参数显式为 null 时也使用默认值。
@@ -29,6 +30,7 @@ DataXSL 是离线数据转换工具。简单多进程模型固定为**一条流�
 | `src/dataxsl/reader.py`、`writer.py` | 插件抽象接口、资源清理和字段检查接口 |
 | `src/dataxsl/register.py` | 插件名称到类的注册与查找 |
 | `src/dataxsl/excel/excel_reader.py` | Excel 解密、表头检查、分批、选列、空值处理与连续 IDX |
+| `src/dataxsl/restapi/restapi_reader.py` | HTTP 请求、可配置 Token 认证/刷新、分页、源列索引/类型处理和 DataFrame 分批 |
 | `src/dataxsl/mysql/mysql_writer.py` | 独立实现 MySQL 参数校验、字段处理、连接、批次提交、计时和异常清理 |
 | `src/dataxsl/postgresql/postgresql_writer.py` | 独立实现 PostgreSQL 参数校验、字段处理、连接、批次提交、计时和异常清理 |
 | `src/dataxsl/transform.py` | 目标字段类型转换，坏值报错而不是静默变成空值 |
@@ -38,7 +40,7 @@ DataXSL 是离线数据转换工具。简单多进程模型固定为**一条流�
 | `examples/excel-to-postgresql.json` | PostgreSQL 连接、schema 表名、会话超时及按位置写入示例 |
 | `tests/unit/`、`tests/worker_scenario.py` | 配置、Excel、模拟 SQL、CLI 及真实多进程故障测试 |
 
-包导入只注册已实现的 `excel_reader`、`mysql_writer`、`postgresql_writer`，不初始化文件日志。MySQLReader、PostgreSQLReader、OracleReader 和其他 Writer 仍是占位实现，不能通过 Job 使用。
+包导入只注册已实现的 `excel_reader`、`restapi_reader`、`mysql_writer`、`postgresql_writer`，不初始化文件日志。MySQLReader、PostgreSQLReader、OracleReader 和其他 Writer（包括 REST Writer）仍是占位实现，不能通过 Job 使用。
 
 本次核对时源码已无 `src/dataxsl/txt`。此前文档中的 TextReader/压缩文本缺陷属于历史实现，未在此次修复中恢复或扩展该插件。
 
@@ -102,6 +104,8 @@ invoke_hook()
 Reader 子进程在 finally 中执行 cleanup；主进程也清理自身插件对象。Reader/Writer 的 post_deal 仍由主进程调用，不依赖子进程中产生的连接或文件对象。清理失败不能将成功作业继续报告为成功，也不覆盖已经发生的首个业务异常。Excel 解密在主进程的 Reader.pre_deal 中执行，临时路径保存在主进程 Reader 对象中。主进程无论预处理失败还是子进程被强制终止，都会在 cleanup 中删除该临时文件；子进程正常退出也执行幂等清理。读进程初始化时还可使用主进程拥有的作业临时目录，回收进程后由主进程兜底删除。
 
 配置、输入路径和解密在 pre_sql 之前执行。Sheet、表头、选列范围及实际读写列数检查在 process_data 的 Reader 初始化期间执行，发生在 pre_sql 之后；即使空输入也检查已知列信息。若这些检查失败，作业停止，但此前已提交的 pre_sql 不会撤销。逐行类型和数据错误也可能在读取过程中出现。
+
+以上流程图以 Excel 为例。REST Reader 保持相同主进程顺序：validate 不联网，pre_deal 解析认证密码；读进程 prepare_read 创建 HTTP Session、获取 Token、预取第一页并确定列，read_parallel 复用第一页循环读取。API 校验失败也发生在 pre_sql 之后。Token、Session 和请求响应留在读进程，认证重试不启动额外 Reader。详细配置及失败边界见 [REST API Reader](restapi-reader.md)。
 
 ## 4. 进程、队列与结果协议
 
@@ -222,7 +226,7 @@ Reader 子进程在 finally 中执行 cleanup；主进程也清理自身插件�
 
 在 process_data 的 Reader 初始化阶段检查最终输出列数与目标列数，每批写入也检查列数；此时 pre_sql 已执行。按位置写入是正常行为，不再产生旧模式告警。字段含义和顺序由作业配置保证；数量相同但语义顺序错误无法自动识别。常量字段遇到多个同名源列时明确失败。
 
-旧 `reader.column` 非空、空列表或缺省都可读取；该字段仅作为历史元数据移除并提醒，不突然启用过去未执行的类型转换。旧 `reader.parallel` 不参与运行并发，setting.parallel 是唯一来源。
+Excel 的旧 `reader.column` 非空、空列表或缺省都可读取；该字段仅作为历史元数据移除并提醒。REST 的 reader.column 保留，按 index 选择源列并执行可选类型转换；Writer 均按输出位置写入，不增加名称映射。旧 reader.parallel 不参与运行并发，setting.parallel 是唯一来源。
 
 ### 6.2 类型转换与 SQL 能力
 
@@ -275,9 +279,10 @@ MySQL 连接默认 `connect_timeout=10`、`read_timeout=30`、`write_timeout=30`
 
 ### 插件参数校验
 
-主进程在执行任何 pre_deal 之前，分别调用一次 Reader.validate 和 Writer.validate。Job 结构由 config.py 的 JOB_SCHEMA 校验；插件参数由插件自身的 EXCEL_READER_SCHEMA、MYSQL_WRITER_SCHEMA、POSTGRESQL_WRITER_SCHEMA 校验，复用 config.py 的 validate_schema。校验器基于 JSON Schema Draft 7，统一报告字段路径与违反的规则，不输出配置原值、密码或 SQL 内容。
+主进程在执行任何 pre_deal 之前，分别调用一次 Reader.validate 和 Writer.validate。Job 结构由 config.py 的 JOB_SCHEMA 校验；插件参数由插件自身的 EXCEL_READER_SCHEMA、RESTAPI_READER_SCHEMA、MYSQL_WRITER_SCHEMA、POSTGRESQL_WRITER_SCHEMA 校验，复用 config.py 的 validate_schema。校验器基于 JSON Schema Draft 7，统一报告字段路径与违反的规则，不输出配置原值、密码或 SQL 内容。
 
 - Excel Schema：路径和 Sheet 名称、密码类型、批大小、表头索引、跳过行、选列索引及去重、IDX 开关。历史 parallel 和 encode 仍为兼容参数，不影响读取行为。
+- REST Schema：HTTP URL、GET/POST、JSON 数据路径、请求头及参数、用户名密码认证（URL 路径模板或参数）与 Token 提取配置、分页元数据路径、批大小、毫秒超时、额外重试次数、退避系数和源列索引/类型。
 - MySQL Schema：目标表和列名、重复目标列、insert 模式、session/pre_sql/post_sql 结构、常量值、column_types 类型定义、连接参数名称、端口和超时范围。其他受支持的驱动参数保留透传；驱动特有语义由 PyMySQL 检查。
 - PostgreSQL Schema：在自身插件中定义目标列、写入模式、SQL 和附加字段规则，按需引用通用类型定义；校验一段或两段表名、连接参数白名单、database/dbname 互斥、可选 schema 名称、整数端口与连接超时、SSL 模式及 keepalive 参数。允许 autocommit 缺省、false 或 null，校验后统一设为 false。
 - 为保持已有语义，整数参数仅接受 Python int，不接受布尔值或 1.0；数值参数拒绝 NaN/Infinity。默认值仍由构造函数及标准化代码填充，Schema 的 default 不用于自动赋值。SQL 字符串在校验通过后统一转换成列表。
@@ -307,7 +312,7 @@ python main.py -job examples/excel-to-postgresql.json \
 - 旧 `setting.speed` 结构在加载层兼容；与扁平 setting 同名参数值冲突时明确失败。
 - 校验覆盖 Job 结构、单 content、插件参数、读写列数和数值范围；不再记录校验失败后继续导入。
 - 兼容 Reader 顶层的可选 `mode: "readOnly"` 声明；它不传入 Reader 构造参数。其他 mode 值和未知字段仍会被拒绝，Writer 不接受该字段。
-- 运行环境要求 Python 3.12+，setup.py 通过 python_requires='>=3.12' 声明最低版本；pyproject.toml 声明构建后端，包列表包含 dataxsl.postgresql。当前回归验证环境为 Python 3.12.7。
+- 运行环境要求 Python 3.12+，setup.py 通过 python_requires='>=3.12' 声明最低版本；pyproject.toml 声明构建后端，包列表包含 dataxsl.postgresql 和 dataxsl.restapi，并声明 Requests HTTP 依赖。当前回归验证环境为 Python 3.12.7。
 
 旧业务样例仍可能包含本机路径、空文件和历史字段，仅作为参考。本次没有修改业务凭据或执行业务样例 SQL。
 
@@ -316,6 +321,8 @@ python main.py -job examples/excel-to-postgresql.json \
 主进程显式初始化日志，按 APP_ENV 选择 config/logging-<env>.yaml，找不到时使用 logging.yaml，无配置时回退控制台。当前开发配置的 root、console 和普通文件处理器均为 DEBUG，错误文件处理器为 ERROR；日志格式包含进程名称和 PID。各环境实际输出级别以对应 YAML 为准。
 
 工作进程通过 QueueHandler 发送日志，主进程 QueueListener 写文件，避免各进程独立轮转同一日志文件。包导入不创建日志目录或打开文件。
+
+DEBUG 级别下，写进程每次取出一个数据批次后输出 `Writer queue after get: batch=1 queue_size=3`，日志前缀包含进程名与 PID。`batch` 为当前写进程已取出的批次数，`queue_size` 为所有写进程共享队列中剩余条目的瞬时值，单位为批次（收尾阶段可能包含结束标记），不包含正在处理的批次。队列持续接近容量上限通常表示写入端较慢；频繁为 0 需结合写进程等待耗时判断读取供给是否不足，单次为 0 并不说明失衡。该日志用于观察，不自动调整并发数。结束标记不触发日志；不支持查询大小时显示 `unavailable`。仅 DEBUG 时执行额外的队列查询和日志转发，查询不计入 queue_seconds，但会增加少量运行开销，正式性能对比建议使用 INFO。
 
 DEBUG 日志仅允许 logger 名称为 dataxsl 或以 dataxsl. 开头的记录；msoffcrypto、psycopg 等第三方库的 DEBUG 会被过滤。INFO 及以上记录仍按环境配置的日志级别输出。LoggingManager 在主进程的控制台、文件及已配置的独立 handler 上统一挂载过滤器，工作进程在 QueueHandler 入队前过滤；回退控制台也使用同一规则。只在 root logger 上设置过滤器不能覆盖子 logger 传播及 QueueListener 转发，因此过滤逻辑放在 handler 上。
 
@@ -332,6 +339,8 @@ PYTHONPATH=src python -B -m unittest discover -s tests/unit -t . -v
 ```
 
 2026-09-18 验证记录：Python 3.12.7 环境下 76 项测试全部通过，包括真实 spawn 子进程场景；MySQLWriter、PostgreSQLWriter、core.py 和 runtime.py 通过静态类型检查。安装包包含独立 PostgreSQL 插件及 Psycopg 依赖，Python 最低版本元数据为 >=3.12；PostgreSQL JSON 示例通过配置校验。数据库操作使用模拟连接，未开展真实 PostgreSQL 导入或吞吐测试。
+
+2026-09-20 新增 REST Reader 后完整回归 93 项测试通过。REST Reader、core.py、runtime.py 通过静态类型检查；安装包已验证 REST 插件、Requests 依赖和 Python >=3.12 元数据。回环 HTTP 服务验证真实用户名密码参数登录、Token 刷新、分页及失败路径，未访问业务接口或数据库。
 
 测试覆盖：
 

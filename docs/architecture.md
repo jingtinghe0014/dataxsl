@@ -1,6 +1,6 @@
 # DataXSL 架构文档导航
 
-> 更新日期：2026-09-18。同步 PostgreSQL Writer、独立连接器的设计边界及两种执行模型的实现状态。
+> 更新日期：2026-09-20。同步 REST API Reader、独立连接器的设计边界及两种执行模型的实现状态。
 
 项目统一以 **Python 3.12+** 为运行基线；多进程版按此声明安装要求，异步模型后续实现沿用同一版本基线。
 
@@ -14,6 +14,7 @@
 | 能力 | 多进程模型 | 异步混合模型 |
 | --- | --- | --- |
 | Excel 读取 | 已实现 `excel_reader` | 草稿，完整链路待实现 |
+| REST API 读取 | 已实现 `restapi_reader`，Token 认证、分页和分批输出 | 待实现逐批线程适配 |
 | MySQL 写入 | 已实现 `mysql_writer` | 待实现线程适配与装配 |
 | PostgreSQL 写入 | 已实现 `postgresql_writer`，使用 Psycopg 3 同步连接 | 待实现线程适配与装配 |
 | 数据库读取 | 尚未实现可用 Reader，PostgreSQL 本阶段仅支持写入 | 按键分片及 Reader 均为后续目标 |
@@ -25,7 +26,7 @@
 
 主进程保持 `validate → pre_deal → process_data → post_deal → invoke_hook` 顺序，失败即停止后续业务步骤，所有路径均清理资源。前后 SQL 和各数据批次分别提交，后续失败不会整体回滚已提交的数据。
 
-运行示例：[Excel → MySQL](../examples/excel-to-mysql.json)、[Excel → PostgreSQL](../examples/excel-to-postgresql.json)。两份示例均使用 `main.py`；异步版尚无可用的对应执行链路。
+运行示例：[Excel → MySQL](../examples/excel-to-mysql.json)、[Excel → PostgreSQL](../examples/excel-to-postgresql.json)、[REST API → MySQL](../examples/restapi-to-mysql.json)。均使用 `main.py`；异步版尚无可用的对应执行链路。REST 认证和分页配置详见 [REST API Reader](restapi-reader.md)。
 
 ## 两种模型的边界
 

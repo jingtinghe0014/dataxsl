@@ -7,6 +7,9 @@ from typing import Any, Literal, TypedDict
 from dataxsl.logging_config import LoggingManager
 
 
+logger = logging.getLogger(__name__)
+
+
 WorkerRole = Literal['reader', 'writer']
 
 
@@ -91,9 +94,17 @@ class CancellableQueue:
     def get(self):
         started = perf_counter()
         try:
-            return self._get()
+            item = self._get()
         finally:
             self.queue_seconds += perf_counter() - started
+        # Observe only at DEBUG; the extra Manager RPC is outside queue timing.
+        if item is not None and logger.isEnabledFor(logging.DEBUG):
+            try:
+                size = self.queue.qsize()
+            except (AttributeError, NotImplementedError, OSError, EOFError):
+                size = 'unavailable'
+            logger.debug('Writer queue after get: batch=%d queue_size=%s', self.batches, size)
+        return item
 
     def _get(self):
         while not self.stop.is_set():
