@@ -1,0 +1,66 @@
+{
+  "job": {
+    "setting": {
+      "channel": 1,
+      "parallel": 4,
+      "queue_size": 10
+    },
+    "content": [
+      {
+        "reader": {
+          "name": "excel_reader",
+          "parameter": {
+            "path": "${input_path}",
+            "sheet_name": "Sheet1",
+            "header": 0,
+            "chunk_size": 1000,
+            "use_cols": [
+              0,
+              1
+            ],
+            "column": [
+              {
+                "index": 0,
+                "type": "string"
+              },
+              {
+                "index": 1,
+                "type": "decimal"
+              }
+            ]
+          }
+        },
+        "writer": {
+          "name": "oracle_writer",
+          "parameter": {
+            "writerMode": "insert",
+            "table": "etl_demo",
+            "column": [
+              "account",
+              "amount",
+              "biz_date"
+            ],
+            "column_types": {
+              "biz_date": "date"
+            },
+            "additive_attr": {
+              "biz_date": "${biz_date}"
+            },
+            "pre_sql": [],
+            "post_sql": [],
+            "session": [],
+            "db_config": {
+              "host": "${DB_HOST}",
+              "port": 1521,
+              "user": "${DB_USER}",
+              "password": "${DB_PASSWORD}",
+              "service_name": "${DB_SERVICE_NAME}",
+              "tcp_connect_timeout": 10,
+              "call_timeout": 30000
+            }
+          }
+        }
+      }
+    ]
+  }
+}
